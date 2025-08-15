@@ -1,0 +1,6 @@
+android-trial-prevention/
+├── android_app/          # Android Kotlin project
+├── backend/              # FastAPI backend
+├── requirements.txt
+├── LICENSE
+└── README.md
