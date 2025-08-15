@@ -1,0 +1,58 @@
+from fastapi import FastAPI
+from pydantic import BaseModel
+import sqlite3
+from datetime import datetime, timedelta
+
+app = FastAPI()
+
+# --- Database Setup ---
+def init_db():
+    conn = sqlite3.connect("database.db")
+    cursor = conn.cursor()
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS trials (
+        email TEXT PRIMARY KEY,
+        trial_start TEXT,
+        trial_end TEXT
+    )
+    """)
+    conn.commit()
+    conn.close()
+
+init_db()
+
+# --- Models ---
+class TrialCheckRequest(BaseModel):
+    email: str
+
+# --- Helper functions ---
+def get_trial_status(email):
+    conn = sqlite3.connect("database.db")
+    cursor = conn.cursor()
+    cursor.execute("SELECT trial_start, trial_end FROM trials WHERE email=?", (email,))
+    row = cursor.fetchone()
+    conn.close()
+
+    if row:
+        trial_end = datetime.strptime(row[1], "%Y-%m-%d")
+        if datetime.now() <= trial_end:
+            return "ACTIVE"
+        else:
+            return "USED"
+    else:
+        # Add new trial for this user (7 days)
+        trial_start = datetime.now()
+        trial_end = trial_start + timedelta(days=7)
+        conn = sqlite3.connect("database.db")
+        cursor = conn.cursor()
+        cursor.execute("INSERT INTO trials VALUES (?, ?, ?)",
+                       (email, trial_start.strftime("%Y-%m-%d"), trial_end.strftime("%Y-%m-%d")))
+        conn.commit()
+        conn.close()
+        return "ACTIVE"
+
+# --- API Route ---
+@app.post("/check_trial")
+def check_trial(data: TrialCheckRequest):
+    status = get_trial_status(data.email)
+    return {"email": data.email, "trial_status": status}
